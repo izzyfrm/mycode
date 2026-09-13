@@ -19,9 +19,9 @@ body {
 }
 
 .container {
-  width: 90%;
+  width: calc(100% - 40px);
   max-width: 900px;
-  margin: 70px auto;
+  margin: clamp(28px, 7vw, 70px) auto;
 }
 
 header {
@@ -34,12 +34,12 @@ header {
 }
 
 .logo span {
-  color: #777;
+  color: #999;
 }
 
 .subtitle {
   margin-top: 8px;
-  color: #777;
+  color: #999;
   font-size: 14px;
 }
 
@@ -57,12 +57,14 @@ header {
   padding: 12px 15px;
   border-bottom: 1px solid #1c1c1c;
   font-size: 13px;
-  color: #777;
+  color: #999;
 }
 
 textarea {
   width: 100%;
+  display: block;
   height: 340px;
+  min-height: 200px;
   padding: 18px;
   border: 0;
   outline: none;
@@ -105,7 +107,6 @@ button:hover {
   margin-top: 35px;
   padding-top: 25px;
   border-top: 1px solid #222;
-  display: none;
 }
 
 .results h2 {
@@ -176,7 +177,7 @@ button:hover {
 }
 
 .issue-line {
-  color: #666;
+  color: #999;
   font-size: 12px;
   margin-bottom: 3px;
 }
@@ -195,46 +196,89 @@ footer {
   padding-top: 20px;
   border-top: 1px solid #181818;
 
-  color: #444;
+  color: #888;
   font-size: 12px;
+}
+
+html { color-scheme: dark; }
+body { line-height: 1.5; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+h1 { margin: 0; letter-spacing: -0.8px; }
+nav { display: flex; gap: 4px; padding: 4px; border: 1px solid #222; border-radius: 8px; }
+nav a { padding: 7px 12px; color: #999; text-decoration: none; font-size: 13px; border-radius: 5px; }
+nav a:hover, nav a[aria-current="page"] { background: #181818; color: #f5f5f5; }
+button, nav a { min-height: 40px; }
+button:focus-visible, a:focus-visible { outline: 2px solid #aaa; outline-offset: 4px; }
+.editor:focus-within { border-color: #888; }
+.editor-top { background: #0c0c0c; }
+textarea::placeholder { color: #777; }
+.actions { align-items: center; flex-wrap: wrap; }
+.primary { background: #e6e6e6; border-color: #e6e6e6; color: #111; font-weight: 600; }
+.primary:hover { background: #fff; }
+button:disabled { opacity: 0.4; cursor: default; }
+.hint, .result-note { color: #999; font-size: 12px; }
+.hint { margin-left: auto; }
+.result-note { margin: -8px 0 20px; }
+.summary { flex-wrap: wrap; }
+.issue-body { min-width: 0; overflow-wrap: anywhere; }
+[hidden] { display: none !important; }
+@media (max-width: 540px) {
+  header { align-items: flex-start; flex-direction: column; gap: 18px; margin-bottom: 24px; }
+  textarea { height: 300px; padding: 14px; font-size: 16px; }
+  .hint { width: 100%; margin: 4px 0 0; }
+  .issue { flex-direction: column; gap: 8px; }
+  .issue-badge { align-self: flex-start; }
+  footer { margin-top: 32px; }
 }
 </style>
 </head>
 
 <body>
 
-<div class="container">
+<main class="container">
 
   <header>
-    <div class="logo">my<span>errors</span></div>
-    <div class="subtitle">
-      Paste code. Find what's broken.
+    <div>
+      <h1 class="logo">my<span>errors</span></h1>
+      <div class="subtitle">
+        Paste code. Find what's broken.
+      </div>
     </div>
+    <nav aria-label="Tools">
+      <a href="index.html">Languages</a>
+      <a href="errors.html" aria-current="page">Errors</a>
+    </nav>
   </header>
 
   <div class="editor">
 
     <div class="editor-top">
-      <span>code</span>
+      <label for="code">code</label>
       <span id="lineCount">0 lines</span>
     </div>
 
     <textarea
       id="code"
       spellcheck="false"
+      autocapitalize="off"
+      autocomplete="off"
+      autocorrect="off"
+      aria-describedby="editorHint"
       placeholder="// paste your code here..."
     ></textarea>
 
   </div>
 
   <div class="actions">
-    <button onclick="check()">Check</button>
-    <button class="clear" onclick="clearCode()">Clear</button>
+    <button class="primary" id="runButton" type="button" onclick="check()" disabled>Check</button>
+    <button type="button" class="clear" onclick="clearCode()">Clear</button>
+    <span class="hint" id="editorHint">Ctrl / ⌘ + Enter to check</span>
   </div>
 
-  <div class="results" id="results">
+  <div class="results" id="results" role="status" aria-live="polite" hidden>
 
     <h2>Issues</h2>
+    <p class="result-note">Lightweight checks for common mistakes, not a full syntax validator.</p>
 
     <div class="summary" id="summary"></div>
 
@@ -246,7 +290,7 @@ footer {
     myerrors / code stays in your browser
   </footer>
 
-</div>
+</main>
 
 <script>
 const codeBox = document.getElementById("code");
@@ -255,19 +299,21 @@ const summary = document.getElementById("summary");
 const issueList = document.getElementById("issueList");
 const lineCount = document.getElementById("lineCount");
 
-codeBox.addEventListener("input", () => {
-  const value = codeBox.value.trim();
+function updateEditor() {
+  const lines = codeBox.value ? codeBox.value.split("\n").length : 0;
+  lineCount.textContent = `${lines} ${lines === 1 ? "line" : "lines"}`;
+  document.getElementById("runButton").disabled = !codeBox.value.trim();
+  results.hidden = true;
+}
 
-  if (!value) {
-    lineCount.textContent = "0 lines";
-    return;
+codeBox.addEventListener("input", updateEditor);
+codeBox.addEventListener("keydown", event => {
+  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+    event.preventDefault();
+    check();
   }
-
-  const lines = codeBox.value.split("\n").length;
-
-  lineCount.textContent =
-    lines === 1 ? "1 line" : `${lines} lines`;
 });
+updateEditor();
 
 function lineOf(code, index) {
   return code.slice(0, index).split("\n").length;
@@ -293,7 +339,7 @@ const REGEX_PRECEDING_WORDS = new Set([
  * Blanked characters are replaced with spaces (or kept as newlines) so that
  * line numbers and column positions stay identical to the original source.
  */
-function analyzeCode(code) {
+function analyzeCode(code, language = "javascript") {
   let out = "";
   let i = 0;
   let inString = null;
@@ -333,44 +379,54 @@ function analyzeCode(code) {
     }
 
     if (inString) {
-      if (c === "\\" && inString !== "`") { out += "  "; i += 2; continue; }
+      if (c === "\\") {
+        out += " ";
+        if (next !== undefined) out += next === "\n" ? "\n" : " ";
+        i += next === undefined ? 1 : 2;
+        continue;
+      }
       if (c === "\n") {
-        if (inString === "`") {
-          // backtick strings may legitimately span multiple lines
+        if (inString === "`" || inString.length === 3) {
+          // Templates and Python triple-quoted strings may span lines.
           out += "\n";
           i++; continue;
         }
         issues.push({
           type: "error",
           line: lineOf(code, stringStartIndex),
-          message: `Unterminated ${inString === '"' ? "double" : "single"}-quoted string starting here`
+          message: `Unterminated ${inString === "`" ? "template" : inString[0] === '"' ? "double" : "single"}-quoted string starting here`
         });
         inString = null;
         // don't consume the newline as part of the string
         continue;
       }
-      if (c === inString) { inString = null; out += " "; i++; continue; }
+      if (code.startsWith(inString, i)) {
+        out += " ".repeat(inString.length);
+        i += inString.length;
+        inString = null;
+        continue;
+      }
       out += " ";
       i++; continue;
     }
 
-    if (c === "/" && next === "/") { inLineComment = true; out += "  "; i += 2; continue; }
-    if (c === "/" && next === "*") {
+    if (c === "/" && next === "/" && language !== "python") { inLineComment = true; out += "  "; i += 2; continue; }
+    if (c === "/" && next === "*" && language !== "python") {
       inBlockComment = true;
       blockCommentStartIndex = i;
       out += "  "; i += 2; continue;
     }
-    if (c === "#") { inLineComment = true; out += " "; i += 1; continue; }
+    if (c === "#" && language === "python") { inLineComment = true; out += " "; i += 1; continue; }
 
     if (c === "'" || c === '"' || c === "`") {
-      inString = c;
+      inString = language === "python" && code.startsWith(c.repeat(3), i) ? c.repeat(3) : c;
       stringStartIndex = i;
-      out += " "; i++; continue;
+      out += " ".repeat(inString.length); i += inString.length; continue;
     }
 
     // Heuristic regex-literal detection so patterns like /\(/ or /[{}]/
     // don't get mistaken for real brackets.
-    if (c === "/") {
+    if (c === "/" && language !== "python") {
       const prevChar = lastNonSpaceChar();
       const prevWord = lastWord();
       const looksLikeRegexStart =
@@ -387,7 +443,10 @@ function analyzeCode(code) {
           if (code[j] === "[") {
             // character class: '/' inside it doesn't end the regex
             j++;
-            while (j < code.length && code[j] !== "]" && code[j] !== "\n") j++;
+            while (j < code.length && code[j] !== "]" && code[j] !== "\n") {
+              j += code[j] === "\\" && code[j + 1] !== "\n" ? 2 : 1;
+            }
+            if (code[j] !== "]") break;
             j++;
             sawContent = true;
             continue;
@@ -418,11 +477,11 @@ function analyzeCode(code) {
       message: "Unterminated block comment /* ... */ starting here"
     });
   }
-  if (inString && inString !== "`") {
+  if (inString) {
     issues.push({
       type: "error",
       line: lineOf(code, stringStartIndex),
-      message: `Unterminated ${inString === '"' ? "double" : "single"}-quoted string starting here`
+      message: `Unterminated ${inString === "`" ? "template" : inString[0] === '"' ? "double" : "single"}-quoted string starting here`
     });
   }
 
@@ -430,8 +489,8 @@ function analyzeCode(code) {
 }
 
 function detectLanguage(code) {
-  if (/^\s*<!DOCTYPE html>|<html[\s>]/i.test(code)) return "html";
-  if (/^\s*(def |class |import |from .* import |print\()/m.test(code) && !/;\s*$/m.test(code)) return "python";
+  if (/^\s*(?:<!DOCTYPE html>|<[a-z][\w-]*(?:\s|>|\/))/i.test(code)) return "html";
+  if (/^\s*(?:def\s+\w+\s*\(|class\s+\w+[^\n]*:|from\s+\w+.*\s+import\s|import\s+[\w.]+\s*$|print\s*\()/m.test(code)) return "python";
   if (/\binterface\s+\w+|\btype\s+\w+\s*=|\benum\s+\w+/.test(code)) return "typescript";
   if (/\bfunction\b|=>|\bconst\b|\blet\b|console\./.test(code)) return "javascript";
   return "generic";
@@ -559,16 +618,17 @@ function checkHtmlTags(raw) {
   return issues;
 }
 
-function checkPython(raw) {
+function checkPython(raw, clean) {
   const issues = [];
   const lines = raw.split("\n");
+  const cleanLines = clean.split("\n");
 
   lines.forEach((line, idx) => {
     const trimmed = line.trim();
-    const stripped = trimmed.replace(/#.*$/, "").trimEnd();
+    const stripped = cleanLines[idx].trim();
 
     if (/^(if|elif|else|for|while|def|class|try|except|finally|with)\b.*[^:]$/.test(stripped) && stripped.length > 0) {
-      if (!/[\\,({\[]$/.test(stripped)) {
+      if (!stripped.includes(":") && !/[\\,({\[]$/.test(stripped)) {
         issues.push({
           type: "warn",
           line: idx + 1,
@@ -605,7 +665,7 @@ function checkJs(raw, clean) {
     const codeLine = cleanLines[idx] !== undefined ? cleanLines[idx] : line;
     const trimmed = codeLine.trim();
 
-    if (/==[^=]/.test(trimmed) && !/===/.test(trimmed)) {
+    if (/(^|[^=!])==(?!=)/.test(trimmed)) {
       issues.push({
         type: "warn",
         line: idx + 1,
@@ -670,20 +730,21 @@ function check() {
 
   if (!raw.trim()) return;
 
-  const { clean, issues: noiseIssues } = analyzeCode(raw);
   const lang = detectLanguage(raw);
+  const { clean, issues: noiseIssues } = analyzeCode(raw, lang);
 
   let issues = [];
 
-  issues = issues.concat(noiseIssues);
-  issues = issues.concat(checkBrackets(clean));
+  if (lang !== "html") {
+    issues = issues.concat(noiseIssues, checkBrackets(clean));
+  }
   issues = issues.concat(checkGeneric(raw));
 
   if (lang === "html") {
     issues = issues.concat(checkHtmlTags(raw));
   }
   if (lang === "python") {
-    issues = issues.concat(checkPython(raw));
+    issues = issues.concat(checkPython(raw, clean));
   }
   if (lang === "javascript" || lang === "typescript") {
     issues = issues.concat(checkJs(raw, clean));
@@ -706,7 +767,7 @@ function check() {
       </div>
     `;
     issueList.innerHTML = '<div class="clean-msg">Looks clean! No obvious errors detected.</div>';
-    results.style.display = "block";
+    results.hidden = false;
     return;
   }
 
@@ -732,20 +793,21 @@ function check() {
       <span class="issue-badge ${badgeClass}">${badgeText}</span>
       <div class="issue-body">
         <div class="issue-line">Line ${issue.line}</div>
-        <div class="issue-msg">${issue.message}</div>
+        <div class="issue-msg"></div>
       </div>
     `;
 
+    el.querySelector(".issue-msg").textContent = issue.message;
     issueList.appendChild(el);
   });
 
-  results.style.display = "block";
+  results.hidden = false;
 }
 
 function clearCode() {
   codeBox.value = "";
-  results.style.display = "none";
-  lineCount.textContent = "0 lines";
+  updateEditor();
+  codeBox.focus();
 }
 </script>
 
