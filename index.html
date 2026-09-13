@@ -604,6 +604,15 @@ function analyze() {
     }
   }
 
+  // Valid JSON is unambiguous; syntax-like text inside its strings is data.
+  try {
+    JSON.parse(code);
+    scores = { JSON: 1 };
+    total = 1;
+  } catch {
+    // Other languages continue through the lightweight syntax scoring above.
+  }
+
   languageBar.innerHTML = "";
   languageList.innerHTML = "";
 
@@ -632,7 +641,7 @@ function analyze() {
     const segment = document.createElement("div");
 
     segment.className = "language-segment";
-    segment.style.width = percentage + "%";
+    segment.style.width = (score / filteredTotal) * 100 + "%";
     segment.style.background = color;
 
     languageBar.appendChild(segment);

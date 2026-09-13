@@ -180,6 +180,14 @@ button:hover {
   color: #999;
   font-size: 12px;
   margin-bottom: 3px;
+  display: block;
+  padding: 0;
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .issue-msg {
@@ -357,7 +365,7 @@ function analyzeCode(code, language = "javascript") {
 
   function lastNonSpaceChar() {
     for (let k = out.length - 1; k >= 0; k--) {
-      if (out[k] !== " " && out[k] !== "\n") return out[k];
+      if (!/\s/.test(out[k])) return out[k];
     }
     return "";
   }
@@ -580,13 +588,13 @@ function checkHtmlTags(raw) {
   const issues = [];
   const voidTags = new Set(["area","base","br","col","embed","hr","img","input","link","meta","param","source","track","wbr"]);
   const stack = [];
-  const tagRegex = /<\/?([a-zA-Z][a-zA-Z0-9-]*)[^>]*?(\/?)>/g;
+  const tagRegex = /<\/?([a-zA-Z][a-zA-Z0-9-]*)\b(?:"[^"]*"|'[^']*'|[^'">])*?>/g;
   let m;
 
   while ((m = tagRegex.exec(cleaned)) !== null) {
     const isClosing = m[0][1] === "/";
     const tag = m[1].toLowerCase();
-    const selfClosed = m[2] === "/" || voidTags.has(tag);
+    const selfClosed = /\/\s*>$/.test(m[0]) || voidTags.has(tag);
     const line = lineOf(cleaned, m.index);
 
     if (isClosing) {
@@ -725,6 +733,15 @@ function dedupe(issues) {
   });
 }
 
+function selectLine(line) {
+  const lines = codeBox.value.split("\n");
+  const start = lines.slice(0, line - 1).reduce((total, text) => total + text.length + 1, 0);
+  codeBox.focus();
+  codeBox.setSelectionRange(start, start + lines[line - 1].length);
+  const lineHeight = parseFloat(getComputedStyle(codeBox).lineHeight);
+  codeBox.scrollTop = Math.max(0, (line - 1) * lineHeight - codeBox.clientHeight / 2);
+}
+
 function check() {
   const raw = codeBox.value;
 
@@ -792,12 +809,13 @@ function check() {
     el.innerHTML = `
       <span class="issue-badge ${badgeClass}">${badgeText}</span>
       <div class="issue-body">
-        <div class="issue-line">Line ${issue.line}</div>
+        <button type="button" class="issue-line" aria-label="Go to line ${issue.line}">Line ${issue.line}</button>
         <div class="issue-msg"></div>
       </div>
     `;
 
     el.querySelector(".issue-msg").textContent = issue.message;
+    el.querySelector(".issue-line").addEventListener("click", () => selectLine(issue.line));
     issueList.appendChild(el);
   });
 
